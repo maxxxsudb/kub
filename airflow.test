@@ -1,665 +1,358 @@
 #!/usr/bin/env bash
-# Диагностика Airflow workers. Настройки и объекты Kubernetes/S3 не изменяются.
-# Создаёт локальный отчёт; внутри pods запускает Airflow/Python для чтения.
-# Отчёт может содержать чувствительные данные из исходных логов и исключений.
-# Запуск: bash airflow_worker_diag.sh
+# На мастер-ноде только Bash/стандартные утилиты; Airflow CLI внутри pods.
+# Отдельные Python-скрипты и команды python не используются.
+# Только чтение: никаких apply/patch/delete/restart и записи объектов S3.
+# Вывод сразу в терминал. Сам скрипт файлы отчёта не создаёт.
 set -u
-umask 077
+set +m
 
-# Заполните два имени. NS можно оставить пустым для поиска namespace.
 GOOD_POD=""
 BAD_POD=""
-NS=""
-# Если в pod несколько контейнеров, укажите контейнер Airflow.
-# Пустое значение использует стандартный выбор kubectl.
-CONTAINER=""
+NS=""                 # Пусто: однозначный поиск по GOOD_POD.
+CONTAINER=""          # Пусто: стандартный выбор контейнера kubectl.
+MINIO_HEALTH_URL=""   # Необязательно: http://host:9000/minio/health/live
 SINCE="12h"
-COMMAND_TIMEOUT=90
-PYTHON_TIMEOUT=60
+STEP_TIMEOUT=8       # Секунд на команду; затем принудительная остановка.
+TOTAL_TIMEOUT=300     # Общий бюджет времени, включая ожидание команд.
 
-for dep in kubectl timeout python3 mktemp; do
-    command -v "$dep" >/dev/null 2>&1 || {
-        echo "ERROR: требуется $dep" >&2; exit 1;
-    }
-done
-if [[ -z "$GOOD_POD" || -z "$BAD_POD" ]]; then
-    echo 'ERROR: заполните GOOD_POD и BAD_POD в начале скрипта.' >&2
-    exit 1
-fi
-if [[ "$GOOD_POD" == "$BAD_POD" ]]; then
-    echo 'ERROR: GOOD_POD и BAD_POD должны отличаться.' >&2
-    exit 1
-fi
-for pod in "$GOOD_POD" "$BAD_POD"; do
-    if [[ ! "$pod" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]]; then
-        echo 'ERROR: неверный формат имени pod.' >&2; exit 1
+ACTIVE_PID=""
+CURRENT_STEP="инициализация"
+FAILURES=0
+START=$SECONDS
+
+stop() {
+    local code="$1"
+    trap '' INT TERM
+    printf '\nОСТАНОВКА: %s\n' "$CURRENT_STEP" >&2
+    if [[ -n "$ACTIVE_PID" ]]; then
+        # Только отдельная группа текущей диагностической команды.
+        kill -TERM -- "-$ACTIVE_PID" 2>/dev/null || true
+        kill -KILL -- "-$ACTIVE_PID" 2>/dev/null || true
+        wait "$ACTIVE_PID" 2>/dev/null || true
     fi
-done
-
-# Ограничивает длительность запросов kubectl, включая чтение логов.
-kube() {
-    timeout --signal=TERM --kill-after=5s "${COMMAND_TIMEOUT}s" \
-        kubectl --request-timeout=20s "$@"
+    exit "$code"
 }
+trap 'stop 130' INT
+trap 'stop 143' TERM
 
-# ------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------
-
-section() {
-    echo
-    echo "======================================================================"
-    echo "$*"
-    echo "======================================================================"
-}
-
-cmd() {
-    echo
-    echo "+ $*"
-    "$@" 2>&1 || true
-}
-
-# Namespace выбирается только при однозначном совпадении.
-if [[ -z "$NS" ]]; then
-    PODS_JSON="$(kube get pods -A -o json)" || {
-        echo 'ERROR: не удалось получить pods. Укажите NS вручную и проверьте доступ.' >&2
+for dep in kubectl timeout setsid awk; do
+    command -v "$dep" >/dev/null 2>&1 || {
+        printf 'ERROR: не найдена команда %s\n' "$dep" >&2
         exit 1
     }
-    NS="$(printf '%s' "$PODS_JSON" | python3 -c '
-import json, sys
-name = sys.argv[1]
-matches = [p["metadata"]["namespace"] for p in json.load(sys.stdin)["items"]
-           if p["metadata"]["name"] == name]
-if len(matches) != 1:
-    print("ERROR: найдено namespaces: %s. Укажите NS вручную." % len(matches), file=sys.stderr)
-    sys.exit(1)
-print(matches[0])
-' "$GOOD_POD")" || exit 1
-    unset PODS_JSON
+done
+if [[ -z "$GOOD_POD" || -z "$BAD_POD" || "$GOOD_POD" == "$BAD_POD" ]]; then
+    echo 'ERROR: заполните GOOD_POD и BAD_POD разными именами.' >&2
+    exit 1
 fi
-for pod in "$GOOD_POD" "$BAD_POD"; do
-    kube get pod -n "$NS" "$pod" -o name >/dev/null || {
-        echo "ERROR: pod $pod недоступен в namespace $NS" >&2; exit 1;
-    }
-    if [[ -n "$CONTAINER" ]]; then
-        containers="$(kube get pod -n "$NS" "$pod" -o jsonpath='{.spec.containers[*].name}')" || exit 1
-        found=false
-        for c in $containers; do [[ "$c" == "$CONTAINER" ]] && found=true; done
-        if [[ "$found" != true ]]; then
-            echo "ERROR: контейнер $CONTAINER отсутствует в $pod" >&2; exit 1
-        fi
-    fi
-done
+if [[ ! "$STEP_TIMEOUT" =~ ^[1-9][0-9]*$ || ! "$TOTAL_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+    echo 'ERROR: таймауты должны быть положительными целыми числами.' >&2
+    exit 1
+fi
 
-exec_pod() {
-    local pod="$1"
+run() {
+    CURRENT_STEP="$1"
     shift
-    local -a args=(exec -i -n "$NS" "$pod")
-    [[ -n "$CONTAINER" ]] && args+=(-c "$CONTAINER")
-    args+=(-- env PYTHONDONTWRITEBYTECODE=1 "$@")
-    kube "${args[@]}" 2>&1
-}
-
-# В Python-блоках таймаут действует внутри контейнера.
-exec_python() {
-    local pod="$1"
-    local bootstrap='import signal, sys; signal.signal(signal.SIGALRM, lambda *args: sys.exit("DIAGNOSTIC TIMEOUT")); signal.alarm(int(sys.argv[1])); exec(compile(sys.stdin.read(), "<diagnostic>", "exec"))'
-    exec_pod "$pod" python -B -c "$bootstrap" "$PYTHON_TIMEOUT"
-}
-
-# mktemp не перезаписывает существующие отчёты; права файла 600.
-OUT="$(mktemp "./airflow_worker_diag_$(date +%Y%m%d_%H%M%S)_XXXXXX.txt")" || exit 1
-echo "Собираю диагностику. Отчёт: $OUT"
-
-
-{
-section "AIRFLOW WORKER DIAGNOSTIC"
-echo "Date:       $(date -Is 2>/dev/null || date)"
-echo "Namespace:  $NS"
-echo "GOOD pod:   $GOOD_POD"
-echo "BAD pod:    $BAD_POD"
-echo "Log period: $SINCE"
-echo
-echo "Диагностика чтением. Без delete/apply/patch/restart и записи объектов S3. Создаёт локальный отчёт."
-
-# ------------------------------------------------------------
-section "1. Kubernetes / cluster basic info"
-
-cmd kube version
-cmd kube get pods -n "$NS" "$GOOD_POD" "$BAD_POD" -o wide
-
-echo
-echo "--- Pod ownership / revisions ---"
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "### $P"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='Name: {.metadata.name}{"\n"}Created: {.metadata.creationTimestamp}{"\n"}Node: {.spec.nodeName}{"\n"}ServiceAccount: {.spec.serviceAccountName}{"\n"}Owner kind: {.metadata.ownerReferences[0].kind}{"\n"}Owner name: {.metadata.ownerReferences[0].name}{"\n"}pod-template-hash: {.metadata.labels.pod-template-hash}{"\n"}controller-revision-hash: {.metadata.labels.controller-revision-hash}{"\n"}' \
-      2>&1 || true
-done
-
-# ------------------------------------------------------------
-section "2. Container images / restart state"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "### $P"
-
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.containers[*]}CONTAINER={.name} IMAGE={.image}{"\n"}{end}' \
-      2>&1 || true
-
-    echo "--- statuses ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .status.containerStatuses[*]}CONTAINER={.name} READY={.ready} RESTARTS={.restartCount} IMAGE_ID={.imageID}{"\n"}LAST_REASON={.lastState.terminated.reason} LAST_EXIT={.lastState.terminated.exitCode} LAST_FINISHED={.lastState.terminated.finishedAt}{"\n"}{end}' \
-      2>&1 || true
-done
-
-# ------------------------------------------------------------
-section "3. Airflow version + effective logging configuration"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    echo "--- airflow version ---"
-    exec_pod "$P" airflow version || true
-
-    echo
-    echo "--- logging config ---"
-
-    for KEY in \
-        remote_logging \
-        remote_base_log_folder \
-        remote_log_conn_id \
-        base_log_folder \
-        logging_config_class \
-        delete_local_logs \
-        task_log_reader \
-        log_filename_template
-    do
-        printf "%-28s = " "$KEY"
-        exec_pod "$P" airflow config get-value logging "$KEY" 2>/dev/null \
-          | head -1 || echo "<not available>"
-    done
-done
-
-# ------------------------------------------------------------
-section "4. Environment: ONLY presence/length, NO secret values"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    exec_python "$P" <<'PY' 2>&1 || true
-import os
-
-interesting_exact = {
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_PROFILE",
-    "AWS_DEFAULT_PROFILE",
-    "AWS_SHARED_CREDENTIALS_FILE",
-    "AWS_CONFIG_FILE",
-}
-
-names = []
-for k in os.environ:
-    if (
-        k in interesting_exact
-        or k.startswith("AIRFLOW__LOGGING__")
-        or k.startswith("AIRFLOW_CONN_")
-        or "MINIO" in k.upper()
-        or k.startswith("AWS_")
-    ):
-        names.append(k)
-
-for k in sorted(set(names)):
-    v = os.environ.get(k, "")
-    print(f"{k}: SET={bool(v)} LENGTH={len(v)}")
-PY
-done
-
-# ------------------------------------------------------------
-section "5. Kubernetes env/envFrom references (names only, not values)"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    echo "--- env names ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.containers[*]}[{.name}]{"\n"}{range .env[*]}  {.name}{"\n"}{end}{end}' \
-      2>&1 || true
-
-    echo
-    echo "--- envFrom refs ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.containers[*]}[{.name}]{"\n"}{range .envFrom[*]}  Secret={.secretRef.name} ConfigMap={.configMapRef.name}{"\n"}{end}{end}' \
-      2>&1 || true
-
-    echo
-    echo "--- explicit secret/configmap key refs ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.containers[*]}[{.name}]{"\n"}{range .env[*]}{.name}: secret={.valueFrom.secretKeyRef.name}/{.valueFrom.secretKeyRef.key} configmap={.valueFrom.configMapKeyRef.name}/{.valueFrom.configMapKeyRef.key}{"\n"}{end}{end}' \
-      2>&1 || true
-done
-
-# ------------------------------------------------------------
-section "6. Airflow remote_log_conn_id resolution (secrets REDACTED)"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    exec_python "$P" <<'PY' 2>&1 || true
-import subprocess
-import traceback
-
-try:
-    conn_id = subprocess.check_output(
-        ["airflow", "config", "get-value", "logging", "remote_log_conn_id"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    ).strip()
-except Exception as e:
-    print("Cannot determine remote_log_conn_id:", repr(e))
-    raise SystemExit
-
-print("remote_log_conn_id =", conn_id)
-
-try:
-    from airflow.hooks.base import BaseHook
-
-    c = BaseHook.get_connection(conn_id)
-
-    print("connection resolved = YES")
-    print("conn_type =", c.conn_type)
-    print("host =", c.host)
-    print("port =", c.port)
-
-    # Do NOT print actual credentials
-    print("login/access-key present =", bool(c.login))
-    print("login length =", len(c.login or ""))
-    print("password/secret present =", bool(c.password))
-    print("password length =", len(c.password or ""))
-
-    try:
-        extra = c.extra_dejson or {}
-        print("extra keys =", sorted(extra.keys()))
-
-        for key in (
-            "endpoint_url",
-            "region_name",
-            "verify",
-            "profile_name",
-            "role_arn",
-            "aws_session_token",
-            "aws_access_key_id",
-            "aws_secret_access_key",
-        ):
-            if key in extra:
-                if any(x in key.lower() for x in ("secret", "access_key", "token")):
-                    val = extra.get(key)
-                    print(f"extra[{key}] present =", bool(val),
-                          "length =", len(str(val)) if val else 0)
-                else:
-                    print(f"extra[{key}] =", extra.get(key))
-    except Exception as e:
-        print("extra parse error:", repr(e))
-
-except Exception as e:
-    print("CONNECTION RESOLUTION FAILED:")
-    print(type(e).__name__ + ":", str(e))
-    traceback.print_exc(limit=5)
-PY
-done
-
-# ------------------------------------------------------------
-section "7. S3Hook / MinIO real READ-ONLY test"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    exec_python "$P" <<'PY' 2>&1 || true
-import subprocess
-import traceback
-from urllib.parse import urlparse
-
-try:
-    conn_id = subprocess.check_output(
-        ["airflow", "config", "get-value", "logging", "remote_log_conn_id"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    ).strip()
-
-    remote = subprocess.check_output(
-        ["airflow", "config", "get-value", "logging", "remote_base_log_folder"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    ).strip()
-
-    print("conn_id =", conn_id)
-    print("remote_base_log_folder =", remote)
-
-    from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-
-    from botocore.config import Config
-    hook = S3Hook(aws_conn_id=conn_id, config=Config(
-        connect_timeout=5, read_timeout=10,
-        retries={"max_attempts": 1},
-    ))
-    client = hook.get_conn()
-
-    print("S3 client creation = OK")
-    print("endpoint =", client.meta.endpoint_url)
-    print("region =", client.meta.region_name)
-
-    # Inspect credential provider result without printing key/secret.
-    try:
-        cred = client._request_signer._credentials
-        print("credentials object present =", cred is not None)
-        if cred is not None:
-            print("credential method =", getattr(cred, "method", None))
-            frozen = cred.get_frozen_credentials()
-            print("access key present =", bool(frozen.access_key))
-            print("secret key present =", bool(frozen.secret_key))
-            print("token present =", bool(frozen.token))
-    except Exception as e:
-        print("credential introspection failed:", repr(e))
-
-    parsed = urlparse(remote)
-
-    if parsed.scheme == "s3" and parsed.netloc:
-        bucket = parsed.netloc
-        prefix = parsed.path.lstrip("/")
-
-        print("bucket =", bucket)
-        print("prefix =", prefix)
-
-        # READ-ONLY request. No writes/deletes.
-        try:
-            r = client.list_objects_v2(
-                Bucket=bucket,
-                Prefix=prefix,
-                MaxKeys=1,
-            )
-            print("LIST TEST = SUCCESS")
-            print("HTTPStatusCode =", r.get("ResponseMetadata", {}).get("HTTPStatusCode"))
-            print("KeyCount =", r.get("KeyCount"))
-        except Exception as e:
-            print("LIST TEST = FAILED")
-            print(type(e).__name__ + ":", str(e))
-            traceback.print_exc(limit=5)
-    else:
-        print("Remote URL isn't s3://... ; skipping object read test")
-
-except Exception as e:
-    print("S3 TEST INITIALIZATION FAILED")
-    print(type(e).__name__ + ":", str(e))
-    traceback.print_exc(limit=8)
-PY
-done
-
-# ------------------------------------------------------------
-section "8. Local task log filesystem"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    exec_python "$P" <<'PY' 2>&1 || true
-import os
-import subprocess
-import time
-
-try:
-    base = subprocess.check_output(
-        ["airflow", "config", "get-value", "logging", "base_log_folder"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    ).strip()
-except Exception as e:
-    print("cannot get base_log_folder:", repr(e))
-    raise SystemExit
-
-print("base_log_folder =", base)
-print("exists =", os.path.exists(base))
-print("is_dir =", os.path.isdir(base))
-print("readable =", os.access(base, os.R_OK))
-print("writable =", os.access(base, os.W_OK))
-
-try:
-    st = os.statvfs(base)
-    free = st.f_bavail * st.f_frsize
-    total = st.f_blocks * st.f_frsize
-    print("filesystem total bytes =", total)
-    print("filesystem free bytes =", free)
-except Exception as e:
-    print("statvfs failed:", repr(e))
-
-files = []
-truncated = False
-visited_dirs = 0
-started = time.monotonic()
-try:
-    for root, dirs, names in os.walk(base, followlinks=False):
-        visited_dirs += 1
-        if visited_dirs > 5000 or time.monotonic() - started > 10:
-            truncated = True
-            break
-        # Не переходить в симлинки и не выходить за пределы base.
-        dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(root, d))]
-        for n in names:
-            if len(files) >= 5000 or time.monotonic() - started > 10:
-                truncated = True
-                break
-            p = os.path.join(root, n)
-            try:
-                s = os.lstat(p)
-                files.append((s.st_mtime, s.st_size, p))
-            except Exception:
-                pass
-        if truncated:
-            break
-except Exception as e:
-    print("walk failed:", repr(e))
-
-files.sort(reverse=True)
-
-print("scanned files =", len(files), "scan limited =", truncated)
-print("20 newest files among scanned:")
-for mtime, size, p in files[:20]:
-    print(
-        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(mtime)),
-        size,
-        p
-    )
-PY
-done
-
-# ------------------------------------------------------------
-section "9. ~/.aws / credential-file presence (contents NOT displayed)"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    exec_pod "$P" sh -c '
-        echo "HOME=$HOME"
-        echo "--- ~/.aws ---"
-        if [ -d "$HOME/.aws" ]; then
-            ls -la "$HOME/.aws" 2>&1
-        else
-            echo "~/.aws does not exist"
-        fi
-
-        echo "--- configured AWS credential/config paths ---"
-        for f in \
-          "${AWS_SHARED_CREDENTIALS_FILE:-}" \
-          "${AWS_CONFIG_FILE:-}"
-        do
-            if [ -n "$f" ]; then
-                if [ -e "$f" ]; then
-                    echo "$f EXISTS"
-                    ls -l "$f"
-                else
-                    echo "$f DOES_NOT_EXIST"
-                fi
-            fi
-        done
-    ' 2>&1 || true
-done
-
-# ------------------------------------------------------------
-section "10. Volumes / mounts"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    echo "--- volume mounts ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.containers[*]}[{.name}]{"\n"}{range .volumeMounts[*]}  {.name} => {.mountPath} readOnly={.readOnly}{"\n"}{end}{end}' \
-      2>&1 || true
-
-    echo
-    echo "--- volume sources ---"
-    kube get pod -n "$NS" "$P" \
-      -o jsonpath='{range .spec.volumes[*]}{.name}: secret={.secret.secretName} configMap={.configMap.name} pvc={.persistentVolumeClaim.claimName}{"\n"}{end}' \
-      2>&1 || true
-done
-
-# ------------------------------------------------------------
-section "11. Worker logs: S3 / credentials / DB / network errors"
-
-PATTERN='NoCredentials|Unable to locate credentials|AccessDenied|InvalidAccessKey|SignatureDoesNotMatch|ExpiredToken|s3|S3|MinIO|minio|botocore|boto3|credential|Failed to upload|upload.*log|EndpointConnection|Connection refused|ConnectTimeout|ReadTimeout|OperationalError|psycopg2|server closed the connection|Traceback'
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    kube logs -n "$NS" "$P" \
-        --all-containers=true \
-        --since="$SINCE" \
-        --tail=3000 --limit-bytes=2097152 \
-        2>&1 \
-      | grep -Ei "$PATTERN" \
-      | tail -300 || true
-done
-
-# ------------------------------------------------------------
-section "12. Previous-container logs, if there were restarts"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    CONTAINERS="$(kube get pod -n "$NS" "$P" \
-        -o jsonpath='{.spec.containers[*].name}' 2>/dev/null || true)"
-
-    for C in $CONTAINERS; do
-        RESTARTS="$(kube get pod -n "$NS" "$P" \
-            -o jsonpath="{.status.containerStatuses[?(@.name==\"$C\")].restartCount}" \
-            2>/dev/null || echo 0)"
-
-        echo "--- container=$C restarts=${RESTARTS:-0} ---"
-
-        case "${RESTARTS:-0}" in
-            ''|0) ;;
-            *)
-                kube logs -n "$NS" "$P" -c "$C" \
-                    --previous --tail=3000 --limit-bytes=2097152 \
-                    2>&1 \
-                  | grep -Ei "$PATTERN" \
-                  | tail -200 || true
-                ;;
-        esac
-    done
-done
-
-# ------------------------------------------------------------
-section "13. Pod events"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    echo
-    echo "#################### $P ####################"
-
-    kube get events -n "$NS" \
-        --field-selector "involvedObject.name=$P" \
-        --sort-by='.lastTimestamp' \
-        2>&1 | tail -100 || true
-done
-
-# ------------------------------------------------------------
-section "14. Node comparison"
-
-for P in "$GOOD_POD" "$BAD_POD"; do
-    NODE="$(kube get pod -n "$NS" "$P" \
-        -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)"
-
-    echo
-    echo "### $P -> $NODE"
-
-    if [ -n "$NODE" ]; then
-        kube get node "$NODE" -o wide 2>&1 || true
-
-        echo "--- node conditions ---"
-        kube get node "$NODE" \
-          -o jsonpath='{range .status.conditions[*]}{.type}={.status} reason={.reason}{"\n"}{end}' \
-          2>&1 || true
+    local remaining=$((TOTAL_TIMEOUT - SECONDS + START))
+    local limit="$STEP_TIMEOUT" rc
+    if (( remaining <= 1 )); then
+        echo 'Достигнут общий лимит времени.' >&2
+        stop 124
     fi
+    (( limit > remaining - 1 )) && limit=$((remaining - 1))
+    printf '\n[%ss] >>> %s (лимит %ss)\n' "$((SECONDS - START))" "$CURRENT_STEP" "$limit" >&2
+    printf '    ' >&2
+    printf '%q ' "$@" >&2
+    printf '\n' >&2
+    # Отдельная группа: Ctrl+C не зависит от реакции kubectl на SIGINT.
+    setsid timeout --signal=TERM --kill-after=1s "${limit}s" "$@" <&0 &
+    ACTIVE_PID=$!
+    wait "$ACTIVE_PID"
+    rc=$?
+    ACTIVE_PID=""
+    case "$rc" in
+        0) echo "<<< OK: $CURRENT_STEP" >&2 ;;
+        124|137)
+            echo "<<< TIMEOUT: $CURRENT_STEP" >&2
+            FAILURES=$((FAILURES + 1)) ;;
+        *)
+            echo "<<< ERROR rc=$rc: $CURRENT_STEP" >&2
+            FAILURES=$((FAILURES + 1)) ;;
+    esac
+    return "$rc"
+}
+
+echo 'Диагностика чтением. Ctrl+C — остановка. Никаких фоновых задач в pods.'
+echo 'Python на мастер-ноде не нужен. Airflow CLI выполняется внутри pods.'
+echo 'Исходные логи/ошибки могут содержать секреты; полный Connection JSON не печатается.'
+
+if [[ -z "$NS" ]]; then
+    # PID не прячется внутри $(...), поэтому trap видит активную команду.
+    # Данные принимаются Bash coproc; запись временных файлов не нужна.
+    CURRENT_STEP="поиск namespace"
+    printf '\n>>> %s (лимит %ss)\n' "$CURRENT_STEP" "$STEP_TIMEOUT" >&2
+    coproc NS_LOOKUP {
+        exec setsid timeout --signal=TERM --kill-after=1s "${STEP_TIMEOUT}s" \
+            kubectl --request-timeout=5s get pods -A \
+            -o 'custom-columns=NS:.metadata.namespace,NAME:.metadata.name' --no-headers
+    }
+    ACTIVE_PID=$NS_LOOKUP_PID
+    LOOKUP_PID=$ACTIVE_PID
+    LOOKUP_FD=${NS_LOOKUP[0]}
+    MATCHES=0
+    while read -r namespace name <&"$LOOKUP_FD"; do
+        if [[ "$name" == "$GOOD_POD" ]]; then
+            NS="$namespace"
+            MATCHES=$((MATCHES + 1))
+        fi
+    done
+    wait "$LOOKUP_PID"
+    rc=$?
+    ACTIVE_PID=""
+    exec {LOOKUP_FD}<&-
+    if (( rc != 0 || MATCHES != 1 )); then
+        printf 'ERROR: поиск namespace rc=%s, совпадений=%s. Заполните NS вручную.\n' "$rc" "$MATCHES" >&2
+        exit 1
+    fi
+    echo "<<< OK: namespace=$NS"
+fi
+
+KUBE=(kubectl --request-timeout=5s)
+run 'Проверка двух pods' "${KUBE[@]}" get pods -n "$NS" "$GOOD_POD" "$BAD_POD" -o wide || exit 1
+
+for POD in "$GOOD_POD" "$BAD_POD"; do
+    echo
+    echo "================ $POD ================"
+    run "$POD: контейнеры, образы, рестарты, узел" "${KUBE[@]}" get pod -n "$NS" "$POD" \
+        -o 'jsonpath=Node: {.spec.nodeName}{"\n"}ServiceAccount: {.spec.serviceAccountName}{"\n"}Revision: {.metadata.labels.controller-revision-hash}{"\n"}{range .spec.containers[*]}Container: {.name} Image: {.image}{"\n"}{end}{range .status.containerStatuses[*]}Status: {.name} Ready: {.ready} Restarts: {.restartCount} ImageID: {.imageID}{"\n"}Last exit: {.lastState.terminated.exitCode} Reason: {.lastState.terminated.reason}{"\n"}{end}' || true
+
+    run "$POD: ссылки env/Secret/ConfigMap и mounts, без значений секретов" "${KUBE[@]}" get pod -n "$NS" "$POD" \
+        -o 'jsonpath={range .spec.containers[*]}Container: {.name}{"\n"}{range .env[*]}Env: {.name} Secret: {.valueFrom.secretKeyRef.name}/{.valueFrom.secretKeyRef.key} ConfigMap: {.valueFrom.configMapKeyRef.name}/{.valueFrom.configMapKeyRef.key}{"\n"}{end}{range .envFrom[*]}EnvFrom Secret: {.secretRef.name} ConfigMap: {.configMapRef.name}{"\n"}{end}{range .volumeMounts[*]}Mount: {.name} Path: {.mountPath} ReadOnly: {.readOnly}{"\n"}{end}{end}' || true
+
+    EXEC=("${KUBE[@]}" exec -i -n "$NS" "$POD")
+    LOGS=("${KUBE[@]}" logs -n "$NS" "$POD")
+    if [[ -n "$CONTAINER" ]]; then
+        EXEC+=(-c "$CONTAINER")
+        LOGS+=(-c "$CONTAINER")
+    fi
+
+    # Каждый вызов Airflow имеет свой видимый шаг и отдельный таймаут.
+    # В контейнере GNU timeout дополнительно ограничивает удалённый процесс.
+    CLI_WRAPPER='if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then exec timeout --signal=TERM --kill-after=1s 6s "$@"; else echo "WARNING: remote timeout unavailable; only local kubectl deadline applies" >&2; exec "$@"; fi'
+    run "$POD: версия Airflow" "${EXEC[@]}" -- env PYTHONDONTWRITEBYTECODE=1 \
+        sh -c "$CLI_WRAPPER" diag airflow version || true
+    for KEY in remote_logging remote_log_conn_id remote_base_log_folder logging_config_class base_log_folder delete_local_logs task_log_reader; do
+        run "$POD: effective logging.$KEY" "${EXEC[@]}" -- env PYTHONDONTWRITEBYTECODE=1 \
+            sh -c "$CLI_WRAPPER" diag airflow config get-value logging "$KEY" || true
+    done
+    run "$POD: Secrets backend" "${EXEC[@]}" -- env PYTHONDONTWRITEBYTECODE=1 \
+        sh -c "$CLI_WRAPPER" diag airflow config get-value secrets backend || true
+
+    run "$POD: фактический remote-log Connection, секретные поля скрыты" \
+        "${EXEC[@]}" -- env PYTHONDONTWRITEBYTECODE=1 sh -s <<'REMOTE_CONNECTION' || true
+set -u
+cli() {
+    if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then
+        timeout --signal=TERM --kill-after=1s 3s airflow "$@"
+    else
+        echo 'WARNING: remote timeout unavailable; only local kubectl deadline applies' >&2
+        airflow "$@"
+    fi
+}
+echo '>>> Получение effective remote_log_conn_id'
+conn_id=$(cli config get-value logging remote_log_conn_id) || exit 1
+# При примеси служебных сообщений берём последнюю непустую строку.
+conn_id=$(printf '%s\n' "$conn_id" | awk 'NF {last=$0} END {print last}')
+if [ -z "$conn_id" ]; then
+    echo 'Connection ID пуст: возможен default AWS credential chain.'
+    exit 0
+fi
+printf 'Connection ID: %s\n' "$conn_id"
+echo '>>> Airflow connections get: чтение через штатный механизм Airflow'
+raw=$(cli connections get "$conn_id" --output json) || {
+    echo 'CONNECTION RESOLUTION FAILED; смотрите stderr выше.'
+    exit 1
+}
+# Парсер JSON на AWK: только allowlist полей. Полный JSON, URI,
+# description и произвольные значения extra никогда не выводятся.
+printf '%s\n' "$raw" | awk '
+function ws() { while (substr(s,p,1) ~ /[ \t\r\n]/ && p<=length(s)) p++ }
+function str(    v,c,e) {
+    if (substr(s,p++,1)!="\"") {bad=1;return ""}
+    v=""
+    while(p<=length(s)) {
+        c=substr(s,p++,1)
+        if(c=="\"")return v
+        if(c=="\\") {
+            e=substr(s,p++,1)
+            if(e=="u") {p+=4;c="?"}
+            else if(e=="n")c="\n"
+            else if(e=="r")c="\r"
+            else if(e=="t")c="\t"
+            else c=e
+        }
+        v=v c
+    }
+    bad=1;return v
+}
+function emit(k,v,    a,b) {
+    if(k ~ /^(login|password|aws_access_key_id|aws_secret_access_key|aws_session_token)$/) {
+        print k ": present=" (v!="" && v!="null" ? "yes":"no") " length=" (v=="null" ? 0:length(v));seen++;return
+    }
+    if(k ~ /^(extra|extra_dejson)$/ && v ~ /^[ \t]*\{/) {
+        a=s;b=p;s=v;p=1;value("extra");s=a;p=b;return
+    }
+    if(k ~ /^(conn_id|conn_type|host|port|schema|endpoint_url|region_name|profile_name|role_arn|verify|is_encrypted|is_extra_encrypted)$/) {
+        gsub(/[\r\n\t]/," ",v)
+        sub(/\/\/[^\/]*@/,"//<redacted>@",v)
+        sub(/\?.*/,"?<redacted>",v)
+        print k "=" v;seen++
+    }
+}
+function value(k,    c,key,v) {
+    ws();c=substr(s,p,1)
+    if(c=="{") {
+        p++;ws();if(substr(s,p,1)=="}"){p++;return}
+        while(p<=length(s) && !bad) {
+            ws();key=str();ws()
+            if(substr(s,p++,1)!=":"){bad=1;return}
+            value(key);ws();c=substr(s,p++,1)
+            if(c=="}")return
+            if(c!=","){bad=1;return}
+        }
+    } else if(c=="[") {
+        p++;ws();if(substr(s,p,1)=="]"){p++;return}
+        while(p<=length(s) && !bad) {
+            value(k);ws();c=substr(s,p++,1)
+            if(c=="]")return
+            if(c!=","){bad=1;return}
+        }
+    } else if(c=="\"") {v=str();emit(k,v)}
+    else {
+        v="";while(p<=length(s) && substr(s,p,1) !~ /[ ,}\]\t\r\n]/)v=v substr(s,p++,1)
+        if(v !~ /^(true|false|null|-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?)$/)bad=1
+        else emit(k,v)
+    }
+}
+{ data=data $0 "\n" }
+END {
+    s=data;p=1;ws()
+    # CLI может добавить служебный stdout перед JSON; не печатаем его.
+    if(match(s,/\[[ \t\r\n]*\{/))s=substr(s,RSTART)
+    else if(match(s,/\{[ \t\r\n]*"/))s=substr(s,RSTART)
+    p=1
+    value("")
+    if(bad || !seen) {print "ERROR: Connection JSON could not be parsed; raw output withheld";exit 1}
+    print "CONNECTION RESOLVED: YES"
+}'
+REMOTE_CONNECTION
+
+    # Фильтрация выполняется на мастере, после bounded kubectl logs.
+    # pipefail сохраняет ошибки kubectl; весь pipeline в отдельной группе.
+    FILTER='set -o pipefail; "$@" 2>&1 | awk '\''/NoCredentials|Unable to locate credentials|AccessDenied|InvalidAccessKey|SignatureDoesNotMatch|ExpiredToken|S3TaskHandler|s3_task_handler|Failed to upload|upload.*log|Could not write|Unable to upload|botocore|EndpointConnection|ConnectTimeout|ReadTimeout|Connection refused|Traceback|PermissionError|No space left/ {print; found=1} END {if(!found) print "No matching errors in sampled container logs; task-file logs may contain more"}'\'''
+    run "$POD: ошибки отправки S3/credentials/network — текущий контейнер" \
+        bash -c "$FILTER" diag "${LOGS[@]}" --since="$SINCE" --tail=3000 --limit-bytes=1048576 || true
+    run "$POD: ошибки отправки — предыдущий контейнер" \
+        bash -c "$FILTER" diag "${LOGS[@]}" --previous --tail=2000 --limit-bytes=1048576 || true
+
+    run "$POD: ошибки S3 в локальных task-файлах (ограниченный поиск)" \
+        "${EXEC[@]}" -- env PYTHONDONTWRITEBYTECODE=1 sh -c '
+        if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then
+            exec timeout --signal=TERM --kill-after=1s 6s sh -s
+        fi
+        echo "SKIP: GNU timeout unavailable in container; recursive scan skipped"
+        exit 1' <<'TASK_FILES' || true
+set -u
+echo '>>> Читаю effective base_log_folder'
+base=$(airflow config get-value logging base_log_folder) || exit 1
+base=$(printf '%s\n' "$base" | awk 'NF {last=$0} END {print last}')
+if [ ! -d "$base" ]; then echo "ERROR: log directory unavailable: $base"; exit 1; fi
+echo ">>> Ищу ошибки в *.log: $base; глубина до 6, последние 12 часов, до 120 совпадений"
+# Весь поиск ограничен удалённым timeout, симлинки find не обходит.
+# awk выходит после 120 совпадений. При отсутствии совпадений всё равно
+# действует общий deadline поиска, это не полный аудит всех task-файлов.
+find "$base" -maxdepth 6 -type f -name '*.log' -mmin -720 \
+    -exec grep -nHE 'NoCredentials|Unable to locate credentials|AccessDenied|InvalidAccessKey|SignatureDoesNotMatch|ExpiredToken|Failed to upload|Unable to upload|Could not write|S3TaskHandler|s3_task_handler|EndpointConnection|ConnectTimeout|ReadTimeout|PermissionError|No space left' {} + \
+    | awk 'NR<=120 {print} NR==120 {exit} END {if(NR==0)print "No matching errors found before scan completion; a timeout means incomplete search"}'
+TASK_FILES
+
+    run "$POD: окружение, конфиг, диск и права (shell внутри контейнера)" \
+        "${EXEC[@]}" -- sh -s -- "$MINIO_HEALTH_URL" <<'REMOTE' || true
+set -u
+echo '--- Пользователь и hostname ---'
+id
+hostname
+echo '--- Переменные: только наличие и длина ---'
+env | awk '
+  /^[A-Za-z_][A-Za-z0-9_]*=/ {
+    p=index($0,"="); k=substr($0,1,p-1); v=substr($0,p+1)
+    if (k ~ /^(AWS_|AIRFLOW_CONN_|AIRFLOW__LOGGING__)/ || k ~ /[Mm][Ii][Nn][Ii][Oo]/)
+      printf "%s: present=%s length=%d\n",k,(length(v)>0 ? "yes":"no"),length(v)
+  }'
+echo '--- Настройки logging: выбранные поля из env ---'
+for key in remote_logging remote_base_log_folder remote_log_conn_id base_log_folder logging_config_class delete_local_logs task_log_reader; do
+    # Никаких eval и печати AIRFLOW_CONN_*.
+    upper=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+    env | awk -v k="AIRFLOW__LOGGING__$upper" 'index($0,k"=")==1 { print $0 }'
+done
+cfg=${AIRFLOW_CONFIG:-${AIRFLOW_HOME:-/opt/airflow}/airflow.cfg}
+echo "--- Конфиг: $cfg ---"
+if [ -r "$cfg" ]; then
+    awk '
+      /^[[:space:]]*\[/ { in_logging=($0 ~ /^[[:space:]]*\[logging\]/) }
+      in_logging && /^[[:space:]]*(remote_logging|remote_base_log_folder|remote_log_conn_id|base_log_folder|logging_config_class|delete_local_logs|task_log_reader)[[:space:]]*=/ { print }
+    ' "$cfg"
+else
+    echo 'Конфиг недоступен; настройки могут приходить через env/Secrets.'
+fi
+echo 'Файл cfg и env не учитывают все overrides/Secrets backend; это не полный effective config.'
+logs=${AIRFLOW__LOGGING__BASE_LOG_FOLDER:-}
+if [ -z "$logs" ] && [ -r "$cfg" ]; then
+    logs=$(awk '
+      /^[[:space:]]*\[/ { section=($0 ~ /^[[:space:]]*\[logging\]/) }
+      section && /^[[:space:]]*base_log_folder[[:space:]]*=/ {
+        sub(/^[^=]*=[[:space:]]*/,""); sub(/[[:space:]]*$/,""); print; exit
+      }' "$cfg")
+fi
+logs=${logs:-${AIRFLOW_HOME:-/opt/airflow}/logs}
+echo "--- Каталог логов: $logs ---"
+ls -ld "$logs" 2>&1
+if [ -d "$logs" ]; then
+    [ -r "$logs" ] && echo 'Readable=yes' || echo 'Readable=no'
+    [ -w "$logs" ] && echo 'Writable=yes (проверка прав без создания файла)' || echo 'Writable=no'
+    df -h "$logs" 2>&1
+    df -i "$logs" 2>&1
+    echo 'Содержимое верхнего уровня, до 25 строк; рекурсивного обхода нет:'
+    ls -lt "$logs" 2>&1 | head -n 25
+fi
+echo '--- AWS-файлы: только метаданные ---'
+for file in "${HOME:-/nonexistent}/.aws/credentials" "${HOME:-/nonexistent}/.aws/config" "${AWS_SHARED_CREDENTIALS_FILE:-}" "${AWS_CONFIG_FILE:-}"; do
+    [ -n "$file" ] || continue
+    if [ -e "$file" ]; then ls -ld "$file"; else printf '%s: отсутствует\n' "$file"; fi
+done
+if [ -n "$1" ]; then
+    echo '--- MinIO health: HTTP GET без credentials, без записи ---'
+    if command -v curl >/dev/null 2>&1; then
+        curl --silent --show-error --connect-timeout 2 --max-time 3 \
+            --output /dev/null --write-out 'HTTP=%{http_code}\n' "$1"
+    else
+        echo 'SKIP: curl отсутствует в контейнере.'
+    fi
+fi
+REMOTE
+
+    run "$POD: последние логи за $SINCE" "${LOGS[@]}" --since="$SINCE" --tail=200 --limit-bytes=262144 || true
+    run "$POD: логи предыдущего контейнера (ошибка нормальна без рестарта)" \
+        "${LOGS[@]}" --previous --tail=100 --limit-bytes=131072 || true
+    run "$POD: события" "${KUBE[@]}" get events -n "$NS" \
+        --field-selector "involvedObject.name=$POD" --sort-by=.lastTimestamp || true
 done
 
-# ------------------------------------------------------------
-section "15. DIAGNOSTIC HINTS"
-
-echo '
-Внимание: LIST TEST проверяет ListBucket, а не PutObject.
-AccessDenied на LIST не доказывает запрет загрузки логов.
-Успех LIST не доказывает возможность записать логи.
-Логи ограничены последними 3000 строками и 2 MiB на контейнер.
-Таймаут/обрезка/ошибка доступа означают неполную диагностику.
-
-Смотреть прежде всего:
-
-A) worker-0:
-      LIST TEST = SUCCESS
-   worker-1:
-      NoCredentialsError / Unable to locate credentials
-   => проблема credentials именно worker-1.
-
-B) Connection resolution отличается:
-      login/access-key present
-      password/secret present
-      extra keys
-   => worker-ы получают разный Airflow Connection / Secret / env.
-
-C) Connection одинаковый, но:
-      credentials object present=False только worker-1
-   => смотреть AWS_* env, ~/.aws, ServiceAccount, mounted Secrets.
-
-D) credentials есть на обоих, но LIST TEST worker-1 timeout/refused
-   => сеть / node / NetworkPolicy / CNI / DNS / MinIO route.
-
-E) S3 LIST TEST успешен на обоих, но worker-1 не отправляет task logs
-   => смотреть локальные logs + worker stdout:
-      Failed to upload / S3TaskHandler / handler close / logging config.
-
-F) worker-1 имеет psycopg2 OperationalError и одновременно сетевые ошибки
-   => проверить node worker-1 и общую сетевую проблему, а не только Airflow.
-'
-
-section "END"
-echo "Diagnostic completed. Проверьте ошибки и таймауты в отчёте."
-
-} >"$OUT" 2>&1
-
 echo
-echo "Готово."
-echo "Файл: $OUT"
-echo
-echo "Последние 30 строк:"
-tail -30 "$OUT"
+echo "Готово за $((SECONDS - START))s. Команд с ошибкой/таймаутом: $FAILURES."
+echo 'Сравните настройки, env presence/length, mounts, образы, права/диск и ошибки загрузки логов.'
+echo 'Доступность MinIO health не проверяет credentials и права PutObject.'
+echo 'Connection читается штатным CLI Airflow внутри каждого worker; секретные значения скрыты.'
+echo 'Источник AWS credentials дополнительно смотрите в env/profile/extra; S3Hook credential chain не исполняется.'
+echo 'Права загрузки оцениваются по ошибкам уже происходивших отправок; пробных записей в S3 нет.'
+echo 'Нет ошибки в выбранных stdout-логах — не доказательство успешной записи; ошибки могут быть в task-файлах.'
