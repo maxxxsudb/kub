@@ -10,10 +10,20 @@ grafana:
       command: ["/bin/sh", "-ec"]
       args:
         - |
+          : "${GIT_URL:?}" "${GIT_BRANCH:?}" "${GIT_USER:?}" "${GIT_TOKEN:?}"
+
+          BASE="${GIT_URL%%/scm/*}"
+          REPO_PATH="${GIT_URL#*/scm/}"
+          PROJECT="${REPO_PATH%%/*}"
+          REPO="${REPO_PATH#*/}"
+          REPO="${REPO%.git}"
+
           curl --fail --show-error --silent \
             --cacert /ca/root-ca.crt \
             --user "$GIT_USER:$GIT_TOKEN" \
-            "$PLUGIN_URL" \
+            --get \
+            --data-urlencode "at=refs/heads/$GIT_BRANCH" \
+            "$BASE/rest/api/1.0/projects/$PROJECT/repos/$REPO/raw/plugin.zip" \
             --output /var/lib/grafana/plugin.zip
 
           mkdir -p /var/lib/grafana/plugins
@@ -24,10 +34,6 @@ grafana:
       envFrom:
         - secretRef:
             name: grafana-plugin-git-auth
-
-      env:
-        - name: PLUGIN_URL
-          value: "https://git.my..com/rest/api/1.0/projects/ccs_crf_ureg/repos/dashboard/raw/plugins/plugin.zip?at=refs%2Fheads%2Fqas"
 
       volumeMounts:
         - name: storage
