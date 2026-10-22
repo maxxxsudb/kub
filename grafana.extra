@@ -1,3 +1,9 @@
+curl --fail --show-error \
+  --user 'ВАШ_ЛОГИН' \
+  --output plugin-test.zip \
+  'https://git.my..com/rest/api/1.0/projects/plccs/repos/gitgrafana/raw/plugin.zip?at=refs%2Fheads%2Fqas'
+
+
 grafana:
   extraContainerVolumes:
     - name: git-ca
