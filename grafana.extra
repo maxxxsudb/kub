@@ -1,0 +1,37 @@
+grafana:
+  extraContainerVolumes:
+    - name: git-ca
+      secret:
+        secretName: grafana-bitbucket-ca
+
+  extraInitContainers:
+    - name: install-private-plugin
+      image: registry.company.ru/tools/curl-unzip:VERSION
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          curl --fail --show-error --silent \
+            --cacert /ca/root-ca.crt \
+            --user "$GIT_USER:$GIT_TOKEN" \
+            "$PLUGIN_URL" \
+            --output /var/lib/grafana/plugin.zip
+
+          mkdir -p /var/lib/grafana/plugins
+          unzip -o /var/lib/grafana/plugin.zip \
+            -d /var/lib/grafana/plugins
+          rm /var/lib/grafana/plugin.zip
+
+      envFrom:
+        - secretRef:
+            name: grafana-plugin-git-auth
+
+      env:
+        - name: PLUGIN_URL
+          value: "https://git.my..com/rest/api/1.0/projects/ccs_crf_ureg/repos/dashboard/raw/plugins/plugin.zip?at=refs%2Fheads%2Fqas"
+
+      volumeMounts:
+        - name: storage
+          mountPath: /var/lib/grafana
+        - name: git-ca
+          mountPath: /ca
+          readOnly: true
