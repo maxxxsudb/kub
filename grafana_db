@@ -26,3 +26,15 @@ WHERE NOT EXISTS (
       AND r.name = d.uid
 )
 ORDER BY d.org_id, d.title;
+
+
+SELECT 'OLD' AS storage, COUNT(*) AS dashboards
+FROM public.dashboard
+WHERE is_folder = FALSE
+
+UNION ALL
+
+SELECT 'NEW' AS storage, COUNT(*) AS dashboards
+FROM public.resource
+WHERE "group" = 'dashboard.grafana.app'
+  AND resource = 'dashboards';
