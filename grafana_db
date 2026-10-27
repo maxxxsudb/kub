@@ -37,4 +37,25 @@ UNION ALL
 SELECT 'NEW' AS storage, COUNT(*) AS dashboards
 FROM public.resource
 WHERE "group" = 'dashboard.grafana.app'
+
+
+SELECT
+    d.org_id,
+    d.title,
+    d.uid,
+    CASE
+        WHEN r.name IS NULL THEN 'MISSING'
+        ELSE 'PRESENT'
+    END AS status
+FROM public.dashboard d
+LEFT JOIN public.resource r
+    ON r."group" = 'dashboard.grafana.app'
+   AND r.resource = 'dashboards'
+   AND r.name = d.uid
+   AND r.namespace = CASE
+       WHEN d.org_id = 1 THEN 'default'
+       ELSE 'org-' || d.org_id::text
+   END
+WHERE d.is_folder = FALSE
+ORDER BY status, d.title;
   AND resource = 'dashboards';
