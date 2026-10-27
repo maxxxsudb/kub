@@ -1,18 +1,28 @@
+WITH old_dashboards AS (
+    SELECT
+        d.org_id,
+        d.uid,
+        d.title,
+        d.updated,
+        CASE
+            WHEN d.org_id = 1 THEN 'default'
+            ELSE 'org-' || CAST(d.org_id AS TEXT)
+        END AS namespace
+    FROM public.dashboard AS d
+    WHERE d.is_folder = FALSE
+)
 SELECT
     d.org_id,
     d.uid,
-    d.title
-FROM dashboard d
-WHERE d.is_folder = 0
-  AND NOT EXISTS (
+    d.title,
+    d.updated
+FROM old_dashboards AS d
+WHERE NOT EXISTS (
     SELECT 1
-    FROM resource r
+    FROM public.resource AS r
     WHERE r."group" = 'dashboard.grafana.app'
       AND r.resource = 'dashboards'
+      AND r.namespace = d.namespace
       AND r.name = d.uid
-      AND r.namespace = CASE
-        WHEN d.org_id = 1 THEN 'default'
-        ELSE 'org-' || CAST(d.org_id AS TEXT)
-      END
-  )
+)
 ORDER BY d.org_id, d.title;
