@@ -1,3 +1,50 @@
+
+(async () => {
+  try {
+    const get = async (url) => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+      return r.json();
+    };
+
+    const db = await get(
+      '/apis/dashboard.grafana.app/v1/namespaces/default/dashboards?limit=1000'
+    );
+
+    const search = await get(
+      '/api/search?type=dash-db&limit=5000'
+    );
+
+    if (!Array.isArray(db.items) || !Array.isArray(search)) {
+      throw new Error('Неожиданный формат ответа API');
+    }
+
+    if (db.metadata?.continue) {
+      throw new Error('Есть следующая страница дашбордов');
+    }
+
+    const indexed = new Set(search.map(x => x.uid));
+
+    const missing = db.items
+      .map(x => ({
+        title: x.spec?.title,
+        uid: x.metadata?.name
+      }))
+      .filter(x => !indexed.has(x.uid));
+
+    console.log('В хранилище:', db.items.length);
+    console.log('В поиске:', search.length);
+    console.log('Не отображаются:', missing.length);
+    console.table(missing);
+
+  } catch (e) {
+    console.error('Ошибка проверки:', e);
+  }
+})();
+
+
+
+
 WITH old_dashboards AS (
     SELECT
         d.org_id,
