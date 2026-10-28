@@ -1,0 +1,10 @@
+apiVersion: v2
+name: budibase-test
+description: Test installation of Budibase
+type: application
+version: 0.1.0
+appVersion: v3.48.0
+dependencies:
+  - name: budibase
+    version: 0.0.0
+    repository: file://charts/budibase

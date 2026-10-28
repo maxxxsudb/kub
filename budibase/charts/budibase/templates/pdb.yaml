@@ -1,0 +1,65 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "budibase.fullname" . }}-proxy-pdb
+  labels:
+    {{- include "budibase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ coalesce .Values.services.proxy.pdb.minAvailable .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: budibase-proxy
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "budibase.fullname" . }}-apps-pdb
+  labels:
+    {{- include "budibase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ coalesce .Values.services.apps.pdb.minAvailable .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      io.kompose.service: app-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "budibase.fullname" . }}-worker-pdb
+  labels:
+    {{- include "budibase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ coalesce .Values.services.worker.pdb.minAvailable .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      io.kompose.service: worker-service
+{{- if .Values.services.automationWorkers.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "budibase.fullname" . }}-automation-worker-pdb
+  labels:
+    {{- include "budibase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ coalesce .Values.services.automationWorkers.pdb.minAvailable .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      io.kompose.service: automation-worker-service
+{{- end }}
+{{- if .Values.services.litellm.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "budibase.fullname" . }}-litellm-pdb
+  labels:
+    {{- include "budibase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ coalesce .Values.services.litellm.pdb.minAvailable .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      io.kompose.service: litellm-service
+{{- end }}
+{{- end }}

@@ -1,0 +1,28 @@
+budibase:
+  ingress:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
+  globals:
+    appVersion: v3.48.0
+    enableAnalytics: "0"
+    offlineMode: "1"
+  services:
+    proxy:
+      replicaCount: 1
+    apps:
+      replicaCount: 1
+    automationWorkers:
+      replicaCount: 1
+    worker:
+      replicaCount: 1
+    redis:
+      image: redis:7.4.5
+    objectStore:
+      image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+  couchdb:
+    image:
+      pullPolicy: IfNotPresent
+    initImage:
+      tag: "1.36.1"
+      pullPolicy: IfNotPresent
