@@ -1,47 +1,50 @@
 
 (async () => {
+  const base = location.pathname.includes('/apis/dashboard.grafana.app/')
+    ? location.pathname.split('/apis/dashboard.grafana.app/')[0]
+    : (window.grafanaBootData?.settings?.appSubUrl || '');
+
+  async function get(name, path) {
+    const r = await fetch(base + path, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    });
+    console.log(name, 'HTTP', r.status);
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+    return r.json();
+  }
+
   try {
-    const get = async (url) => {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-      return r.json();
-    };
+    const db = await get('Хранилище',
+      '/apis/dashboard.grafana.app/v1/namespaces/default/dashboards?limit=1000');
 
-    const db = await get(
-      '/apis/dashboard.grafana.app/v1/namespaces/default/dashboards?limit=1000'
-    );
-
-    const search = await get(
-      '/api/search?type=dash-db&limit=5000'
-    );
+    const search = await get('Поиск',
+      '/api/search?type=dash-db&limit=5000');
 
     if (!Array.isArray(db.items) || !Array.isArray(search)) {
-      throw new Error('Неожиданный формат ответа API');
+      throw new Error('Неожиданный формат ответа');
     }
-
     if (db.metadata?.continue) {
-      throw new Error('Есть следующая страница дашбордов');
+      throw new Error('Есть ещё страницы хранилища');
     }
 
-    const indexed = new Set(search.map(x => x.uid));
-
+    const visible = new Set(search.map(x => x.uid));
     const missing = db.items
       .map(x => ({
         title: x.spec?.title,
         uid: x.metadata?.name
       }))
-      .filter(x => !indexed.has(x.uid));
+      .filter(x => !visible.has(x.uid));
 
-    console.log('В хранилище:', db.items.length);
+    console.log('Всего в хранилище:', db.items.length);
     console.log('В поиске:', search.length);
-    console.log('Не отображаются:', missing.length);
+    console.log('Пропавших из поиска:', missing.length);
     console.table(missing);
-
   } catch (e) {
-    console.error('Ошибка проверки:', e);
+    console.error(e.message);
   }
 })();
-
+------
 
 
 
