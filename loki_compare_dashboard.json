@@ -1,923 +1,179 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_LOKI",
-      "label": "Loki",
-      "description": "Выберите источник данных Loki",
-      "type": "datasource",
-      "pluginId": "loki",
-      "pluginName": "Loki"
-    }
-  ],
-  "__elements": {},
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "10.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "loki",
-      "name": "Loki",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    }
-  ],
-  "annotations": {
-    "list": []
-  },
-  "description": "Сравнение двух равных интервалов логирования в Loki. Выберите абсолютный период B (после) в календаре Grafana, а период A (до) определяется переменной compare_offset. Измеряется несжатый объём строк, а не объём chunks на диске.",
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 1,
   "id": null,
-  "links": [],
-  "panels": [
-    {
-      "type": "stat",
-      "title": "A · Объём логов ДО",
-      "id": 1,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "decimals": 2,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "description": "Сумма байт логовых строк в предыдущем периоде, заданном compare_offset."
-    },
-    {
-      "type": "stat",
-      "title": "B · Объём логов ПОСЛЕ",
-      "id": 2,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time(${selector:raw}[${__range}]))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "decimals": 2,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "description": "Объём строк за период, выбранный стандартным time picker Grafana."
-    },
-    {
-      "type": "stat",
-      "title": "Δ Объём, байт",
-      "id": 3,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "(sum(bytes_over_time(${selector:raw}[${__range}]))) - (sum(bytes_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw})))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "decimals": 2,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "description": "Дополнительный несжатый объём логовых строк. Может быть отрицательным."
-    },
-    {
-      "type": "stat",
-      "title": "Δ Объём, %",
-      "id": 4,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "100 * ((sum(bytes_over_time(${selector:raw}[${__range}]))) / (sum(bytes_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))) - 1)",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 20
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "description": "(B/A − 1) × 100 %."
-    },
-    {
-      "type": "stat",
-      "title": "A · Сообщений ДО",
-      "id": 5,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 5,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "B · Сообщений ПОСЛЕ",
-      "id": 6,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 5,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time(${selector:raw}[${__range}]))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Δ Количество сообщений, %",
-      "id": 7,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 16,
-        "y": 5,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "100 * ((sum(count_over_time(${selector:raw}[${__range}]))) / (sum(count_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))) - 1)",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 20
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "A · Средний размер сообщения",
-      "id": 8,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 10,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "(sum(bytes_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))) / (sum(count_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw})))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "B · Средний размер сообщения",
-      "id": 9,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 10,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "(sum(bytes_over_time(${selector:raw}[${__range}]))) / (sum(count_over_time(${selector:raw}[${__range}])))",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Δ Размер сообщения, %",
-      "id": 10,
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 16,
-        "y": 10,
-        "w": 8,
-        "h": 5
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "100 * (((sum(bytes_over_time(${selector:raw}[${__range}]))) / (sum(count_over_time(${selector:raw}[${__range}])))) / ((sum(bytes_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw}))) / (sum(count_over_time(${selector:raw}[${__range}] offset ${compare_offset:raw})))) - 1)",
-          "queryType": "instant",
-          "refId": "A",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 2,
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 20
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value_and_name",
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "description": "Изменение среднего количества байт на одно сообщение; изменение состава событий может повлиять на этот показатель."
-    },
-    {
-      "type": "timeseries",
-      "id": 11,
-      "title": "Объём логовых строк за скользящие 5 минут · A vs B",
-      "description": "Обе линии привязаны к шкале времени периода B. Линия A смещена при помощи offset. На графике значения за скользящие 5 минут; точные итоги — в карточках выше.",
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 15,
-        "w": 24,
-        "h": 9
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time(${selector:raw}[5m] offset ${compare_offset:raw}))",
-          "queryType": "range",
-          "refId": "A",
-          "legendFormat": "A · до"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time(${selector:raw}[5m]))",
-          "queryType": "range",
-          "refId": "B",
-          "legendFormat": "B · после"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "bytes",
-          "decimals": 2,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "fillOpacity": 11,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "id": 12,
-      "title": "Количество сообщений за скользящие 5 минут · A vs B",
-      "description": "Обе линии привязаны к шкале времени периода B. Линия A смещена при помощи offset. На графике значения за скользящие 5 минут; точные итоги — в карточках выше.",
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 24,
-        "h": 9
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time(${selector:raw}[5m] offset ${compare_offset:raw}))",
-          "queryType": "range",
-          "refId": "A",
-          "legendFormat": "A · до"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time(${selector:raw}[5m]))",
-          "queryType": "range",
-          "refId": "B",
-          "legendFormat": "B · после"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short",
-          "decimals": 2,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "fillOpacity": 11,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
-        }
-      }
-    }
-  ],
-  "refresh": "",
-  "schemaVersion": 39,
+  "uid": "loki-log-compare",
+  "title": "Loki · Сравнение объёма логов (исправлено)",
+  "description": "Сравнение двух периодов с каскадным выбором namespace и приложения. A = B со сдвигом назад; данные в байтах логовых строк без сжатия.",
   "tags": [
     "loki",
-    "logs",
-    "compare",
-    "volume",
-    "dev"
+    "logging",
+    "comparison",
+    "before-after"
   ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 40,
+  "version": 2,
+  "refresh": "",
+  "time": {
+    "from": "2026-11-16T05:00:00.000Z",
+    "to": "2026-11-16T08:00:00.000Z"
+  },
+  "timepicker": {
+    "refresh_intervals": []
+  },
+  "graphTooltip": 0,
   "templating": {
     "list": [
       {
-        "name": "selector",
-        "label": "LogQL selector",
-        "type": "textbox",
-        "description": "Селектор нужных логовых streams, например {namespace=\"dev\",app=\"backend\"}. Не включайте [3h].",
+        "name": "datasource",
+        "label": "Источник Loki",
+        "type": "datasource",
+        "query": "loki",
+        "regex": "",
+        "refresh": 1,
         "hide": 0,
         "skipUrlSync": false,
-        "query": "{namespace=\"dev\",app=\"my-service\"}",
+        "options": [],
         "current": {
-          "text": "{namespace=\"dev\",app=\"my-service\"}",
-          "value": "{namespace=\"dev\",app=\"my-service\"}"
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "namespace_label",
+        "label": "Метка namespace",
+        "type": "custom",
+        "description": "Выберите имя индексированной метки, в которой Loki хранит namespace.",
+        "hide": 0,
+        "skipUrlSync": false,
+        "query": "namespace,kubernetes_namespace_name,k8s_namespace_name",
+        "current": {
+          "text": "namespace",
+          "value": "namespace"
         },
-        "options": []
+        "options": [
+          {
+            "text": "namespace",
+            "value": "namespace",
+            "selected": true
+          },
+          {
+            "text": "kubernetes_namespace_name",
+            "value": "kubernetes_namespace_name",
+            "selected": false
+          },
+          {
+            "text": "k8s_namespace_name",
+            "value": "k8s_namespace_name",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "${datasource}"
+        },
+        "description": "Значения метки namespace из выбранного Loki",
+        "hide": 0,
+        "skipUrlSync": false,
+        "query": "label_values(${namespace_label:raw})",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "app_label",
+        "label": "Метка приложения",
+        "type": "custom",
+        "description": "Выберите имя индексированной метки приложения.",
+        "hide": 0,
+        "skipUrlSync": false,
+        "query": "app,service_name,application,app_kubernetes_io_name,container,container_name,job",
+        "current": {
+          "text": "app",
+          "value": "app"
+        },
+        "options": [
+          {
+            "text": "app",
+            "value": "app",
+            "selected": true
+          },
+          {
+            "text": "service_name",
+            "value": "service_name",
+            "selected": false
+          },
+          {
+            "text": "application",
+            "value": "application",
+            "selected": false
+          },
+          {
+            "text": "app_kubernetes_io_name",
+            "value": "app_kubernetes_io_name",
+            "selected": false
+          },
+          {
+            "text": "container",
+            "value": "container",
+            "selected": false
+          },
+          {
+            "text": "container_name",
+            "value": "container_name",
+            "selected": false
+          },
+          {
+            "text": "job",
+            "value": "job",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "application",
+        "label": "Приложение",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "${datasource}"
+        },
+        "description": "Приложения только в выбранном namespace.",
+        "hide": 0,
+        "skipUrlSync": false,
+        "query": "label_values({${namespace_label:raw}=~\"${namespace:regex}\"}, ${app_label:raw})",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "text": "",
+          "value": ""
+        }
       },
       {
         "name": "compare_offset",
-        "label": "Сдвиг A относительно B",
+        "label": "Сдвиг A",
         "type": "textbox",
-        "description": "A расположен на это время РАНЬШЕ B. Для 16 и 17 ноября — 24h. Можно 36h, 7d или 86400s.",
+        "description": "A расположен раньше B. Значение задаётся HTML-календарём из комплекта или вручную (24h, 7d).",
         "hide": 0,
         "skipUrlSync": false,
         "query": "24h",
@@ -929,16 +185,893 @@
       }
     ]
   },
-  "time": {
-    "from": "2026-11-17T05:00:00.000Z",
-    "to": "2026-11-17T08:00:00.000Z"
+  "annotations": {
+    "list": []
   },
-  "timepicker": {
-    "hidden": false,
-    "refresh_intervals": []
-  },
-  "timezone": "browser",
-  "title": "Loki · Сравнение объёма логов двух периодов",
-  "uid": "loki-log-compare",
-  "version": 1
+  "panels": [
+    {
+      "id": 100,
+      "type": "text",
+      "title": "Как сравниваются периоды",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**B (позже)** = интервал справа сверху в Grafana. **A (раньше)** = тот же интервал, но на величину `Сдвиг A` раньше. Выберите **Loki → namespace → метку приложения → приложение**. Для дат 16 и 17 ноября выберите B=17.11.2026 09:00–12:00 (UTC+04:00), сдвиг=24h. **17 ноября ещё не наступило?** B пока не содержит логов, сравнение процентов не готово. Автообновление отключено. Для произвольной пары дат используйте HTML-календарь из комплекта."
+      }
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "A · Объём логов (раньше)",
+      "description": "Ранее выбранный интервал",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "B · Объём логов (позже)",
+      "description": "Интервал в правом верхнем углу",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Δ Объёма, байт",
+      "description": "B минус A",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0)) - (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0)))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Δ Объёма, %",
+      "description": "Не вычисляется без логов в одном из периодов",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "100 * (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) - 1)",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "A · Количество записей",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "B · Количество записей",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Δ Количества записей, %",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "100 * (sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) - 1)",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Δ Количества записей",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0)) - (sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0)))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "A · Средний размер записи",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "B · Средний размер записи",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 13,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Δ Среднего размера, %",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "100 * ((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}]))) / (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw}))) - 1)",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Δ Среднего размера, байт",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 13,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}]))) - (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw}))))",
+          "queryType": "instant",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "title": "Объём логов за скользящие 15 минут · A и B",
+      "type": "timeseries",
+      "description": "Скользящий интервал 15 минут. Ось времени относится к B, A сдвинут для сопоставления.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m] offset ${compare_offset:raw}))",
+          "queryType": "range",
+          "legendFormat": "A · раньше"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m]))",
+          "queryType": "range",
+          "legendFormat": "B · позже"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Количество логов за скользящие 15 минут · A и B",
+      "type": "timeseries",
+      "description": "Скользящий интервал 15 минут. Ось времени относится к B, A сдвинут для сопоставления.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m] offset ${compare_offset:raw}))",
+          "queryType": "range",
+          "legendFormat": "A · раньше"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m]))",
+          "queryType": "range",
+          "legendFormat": "B · позже"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ],
+  "links": []
 }
