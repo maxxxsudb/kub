@@ -1,8 +1,8 @@
 {
   "id": null,
-  "uid": "loki-log-compare",
-  "title": "Loki · Сравнение объёма логов (исправлено)",
-  "description": "Сравнение двух периодов с каскадным выбором namespace и приложения. A = B со сдвигом назад; данные в байтах логовых строк без сжатия.",
+  "uid": null,
+  "title": "Loki — Сравнение объёма логов · namespace / application",
+  "description": "Сравнение двух периодов по индексированным меткам Loki namespace и application; каскадные выпадающие списки.",
   "tags": [
     "loki",
     "logging",
@@ -12,11 +12,11 @@
   "timezone": "browser",
   "editable": true,
   "schemaVersion": 40,
-  "version": 2,
+  "version": 5,
   "refresh": "",
   "time": {
     "from": "2026-11-16T05:00:00.000Z",
-    "to": "2026-11-16T08:00:00.000Z"
+    "to": "2026-11-17T08:00:00.000Z"
   },
   "timepicker": {
     "refresh_intervals": []
@@ -40,38 +40,6 @@
         }
       },
       {
-        "name": "namespace_label",
-        "label": "Метка namespace",
-        "type": "custom",
-        "description": "Выберите имя индексированной метки, в которой Loki хранит namespace.",
-        "hide": 0,
-        "skipUrlSync": false,
-        "query": "namespace,kubernetes_namespace_name,k8s_namespace_name",
-        "current": {
-          "text": "namespace",
-          "value": "namespace"
-        },
-        "options": [
-          {
-            "text": "namespace",
-            "value": "namespace",
-            "selected": true
-          },
-          {
-            "text": "kubernetes_namespace_name",
-            "value": "kubernetes_namespace_name",
-            "selected": false
-          },
-          {
-            "text": "k8s_namespace_name",
-            "value": "k8s_namespace_name",
-            "selected": false
-          }
-        ],
-        "multi": false,
-        "includeAll": false
-      },
-      {
         "name": "namespace",
         "label": "Namespace",
         "type": "query",
@@ -79,11 +47,11 @@
           "type": "loki",
           "uid": "${datasource}"
         },
-        "description": "Значения метки namespace из выбранного Loki",
+        "description": "Индексированные значения метки namespace в общем временном диапазоне.",
         "hide": 0,
         "skipUrlSync": false,
-        "query": "label_values(${namespace_label:raw})",
-        "refresh": 1,
+        "query": "label_values(namespace)",
+        "refresh": 2,
         "regex": "",
         "sort": 1,
         "multi": false,
@@ -92,73 +60,22 @@
         "current": {
           "text": "",
           "value": ""
-        }
-      },
-      {
-        "name": "app_label",
-        "label": "Метка приложения",
-        "type": "custom",
-        "description": "Выберите имя индексированной метки приложения.",
-        "hide": 0,
-        "skipUrlSync": false,
-        "query": "app,service_name,application,app_kubernetes_io_name,container,container_name,job",
-        "current": {
-          "text": "app",
-          "value": "app"
         },
-        "options": [
-          {
-            "text": "app",
-            "value": "app",
-            "selected": true
-          },
-          {
-            "text": "service_name",
-            "value": "service_name",
-            "selected": false
-          },
-          {
-            "text": "application",
-            "value": "application",
-            "selected": false
-          },
-          {
-            "text": "app_kubernetes_io_name",
-            "value": "app_kubernetes_io_name",
-            "selected": false
-          },
-          {
-            "text": "container",
-            "value": "container",
-            "selected": false
-          },
-          {
-            "text": "container_name",
-            "value": "container_name",
-            "selected": false
-          },
-          {
-            "text": "job",
-            "value": "job",
-            "selected": false
-          }
-        ],
-        "multi": false,
-        "includeAll": false
+        "definition": "label_values(namespace)"
       },
       {
         "name": "application",
-        "label": "Приложение",
+        "label": "Application",
         "type": "query",
         "datasource": {
           "type": "loki",
           "uid": "${datasource}"
         },
-        "description": "Приложения только в выбранном namespace.",
+        "description": "Индексированные значения label application для выбранного namespace",
         "hide": 0,
         "skipUrlSync": false,
-        "query": "label_values({${namespace_label:raw}=~\"${namespace:regex}\"}, ${app_label:raw})",
-        "refresh": 1,
+        "query": "label_values({namespace=\"$namespace\"}, application)",
+        "refresh": 2,
         "regex": "",
         "sort": 1,
         "multi": false,
@@ -167,13 +84,28 @@
         "current": {
           "text": "",
           "value": ""
-        }
+        },
+        "definition": "label_values({namespace=\"$namespace\"}, application)"
+      },
+      {
+        "name": "window",
+        "label": "Длительность измерения",
+        "type": "textbox",
+        "description": "Ровно столько часов/минут анализируется в каждом периоде, независимо от ширины общего диапазона Grafana. Например 3h, 90m, 10800s.",
+        "hide": 0,
+        "skipUrlSync": false,
+        "query": "3h",
+        "current": {
+          "text": "3h",
+          "value": "3h"
+        },
+        "options": []
       },
       {
         "name": "compare_offset",
         "label": "Сдвиг A",
         "type": "textbox",
-        "description": "A расположен раньше B. Значение задаётся HTML-календарём из комплекта или вручную (24h, 7d).",
+        "description": "Сколько времени отделяет начало A от начала B; 24h по умолчанию.",
         "hide": 0,
         "skipUrlSync": false,
         "query": "24h",
@@ -192,16 +124,21 @@
     {
       "id": 100,
       "type": "text",
-      "title": "Как сравниваются периоды",
+      "title": "Периоды, выбор приложения и точность",
       "gridPos": {
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 3
+        "h": 4
       },
       "options": {
         "mode": "markdown",
-        "content": "**B (позже)** = интервал справа сверху в Grafana. **A (раньше)** = тот же интервал, но на величину `Сдвиг A` раньше. Выберите **Loki → namespace → метку приложения → приложение**. Для дат 16 и 17 ноября выберите B=17.11.2026 09:00–12:00 (UTC+04:00), сдвиг=24h. **17 ноября ещё не наступило?** B пока не содержит логов, сравнение процентов не готово. Автообновление отключено. Для произвольной пары дат используйте HTML-календарь из комплекта."
+        "content": "### Loki · сравнение периодов по `namespace` / `application`\nВыбери **Источник Loki → Namespace → Application**. Приложения выбираются из индексированной метки `application` только внутри выбранного namespace. Для другого периода используй календарь из комплекта или задай диапазон Grafana от начала A до конца B, `Длительность измерения` и `Сдвиг A`.\n\n**A** — ранний период. **B** — последние `Длительность измерения` до конца диапазона Grafana. **A** соответствует B со сдвигом назад на `Сдвиг A`. Значения в карточках — размер строк логов **до сжатия** в Loki. Пока B не наступил или ещё не завершён, его данные могут отсутствовать/быть неполными.\n"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "—"
+        }
       }
     },
     {
@@ -215,7 +152,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 3,
+        "y": 4,
         "w": 6,
         "h": 5
       },
@@ -227,7 +164,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -245,7 +182,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -275,7 +213,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 3,
+        "y": 4,
         "w": 6,
         "h": 5
       },
@@ -287,7 +225,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -305,7 +243,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -335,7 +274,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 3,
+        "y": 4,
         "w": 6,
         "h": 5
       },
@@ -347,7 +286,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0)) - (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0)))",
+          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0)) - (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -365,7 +304,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -395,7 +335,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 3,
+        "y": 4,
         "w": 6,
         "h": 5
       },
@@ -407,7 +347,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) - 1)",
+          "expr": "100 * (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -425,7 +365,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -455,7 +396,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 9,
         "w": 6,
         "h": 5
       },
@@ -467,7 +408,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0))",
+          "expr": "(sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -485,7 +426,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -515,7 +457,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 8,
+        "y": 9,
         "w": 6,
         "h": 5
       },
@@ -527,7 +469,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0))",
+          "expr": "(sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -545,7 +487,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -575,7 +518,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 9,
         "w": 6,
         "h": 5
       },
@@ -587,7 +530,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) - 1)",
+          "expr": "100 * (sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -605,7 +548,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -635,7 +579,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 8,
+        "y": 9,
         "w": 6,
         "h": 5
       },
@@ -647,7 +591,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) or vector(0)) - (sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) or vector(0)))",
+          "expr": "((sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0)) - (sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -665,7 +609,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -695,7 +640,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 14,
         "w": 6,
         "h": 5
       },
@@ -707,7 +652,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -725,7 +670,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -755,7 +701,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 13,
+        "y": 14,
         "w": 6,
         "h": 5
       },
@@ -767,7 +713,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -785,7 +731,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -815,7 +762,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 14,
         "w": 6,
         "h": 5
       },
@@ -827,7 +774,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * ((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}]))) / (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw}))) - 1)",
+          "expr": "100 * ((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}]))) / (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw}))) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -845,7 +792,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -875,7 +823,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 13,
+        "y": 14,
         "w": 6,
         "h": 5
       },
@@ -887,7 +835,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}])) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}]))) - (sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw})) / sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[${__range}] offset ${compare_offset:raw}))))",
+          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}]))) - (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw}))))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -905,7 +853,8 @@
                 "color": "green"
               }
             ]
-          }
+          },
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -922,154 +871,6 @@
         "colorMode": "none",
         "graphMode": "none",
         "justifyMode": "auto"
-      }
-    },
-    {
-      "id": 13,
-      "title": "Объём логов за скользящие 15 минут · A и B",
-      "type": "timeseries",
-      "description": "Скользящий интервал 15 минут. Ось времени относится к B, A сдвинут для сопоставления.",
-      "datasource": {
-        "type": "loki",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 18,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "loki",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m] offset ${compare_offset:raw}))",
-          "queryType": "range",
-          "legendFormat": "A · раньше"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "loki",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(bytes_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m]))",
-          "queryType": "range",
-          "legendFormat": "B · позже"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 12,
-            "showPoints": "auto",
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 14,
-      "title": "Количество логов за скользящие 15 минут · A и B",
-      "type": "timeseries",
-      "description": "Скользящий интервал 15 минут. Ось времени относится к B, A сдвинут для сопоставления.",
-      "datasource": {
-        "type": "loki",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 26,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "loki",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m] offset ${compare_offset:raw}))",
-          "queryType": "range",
-          "legendFormat": "A · раньше"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "loki",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time({${namespace_label:raw}=~\"${namespace:regex}\",${app_label:raw}=~\"${application:regex}\"}[15m]))",
-          "queryType": "range",
-          "legendFormat": "B · позже"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 12,
-            "showPoints": "auto",
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
       }
     }
   ],
