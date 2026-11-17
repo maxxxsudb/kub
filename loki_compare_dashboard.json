@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": null,
-  "title": "Loki — Сравнение объёма логов · namespace / application",
-  "description": "Сравнение двух периодов по индексированным меткам Loki namespace и application; каскадные выпадающие списки.",
+  "title": "Loki — Сравнение объёма логов · namespace / job",
+  "description": "Сравнение двух периодов по индексированным меткам Loki namespace и job; каскадные выпадающие списки.",
   "tags": [
     "loki",
     "logging",
@@ -64,17 +64,17 @@
         "definition": "label_values(namespace)"
       },
       {
-        "name": "application",
-        "label": "Application",
+        "name": "job",
+        "label": "Job",
         "type": "query",
         "datasource": {
           "type": "loki",
           "uid": "${datasource}"
         },
-        "description": "Индексированные значения label application для выбранного namespace",
+        "description": "Индексированные значения label job для выбранного namespace",
         "hide": 0,
         "skipUrlSync": false,
-        "query": "label_values({namespace=\"$namespace\"}, application)",
+        "query": "label_values({namespace=\"$namespace\"}, job)",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -85,7 +85,7 @@
           "text": "",
           "value": ""
         },
-        "definition": "label_values({namespace=\"$namespace\"}, application)"
+        "definition": "label_values({namespace=\"$namespace\"}, job)"
       },
       {
         "name": "window",
@@ -133,7 +133,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "### Loki · сравнение периодов по `namespace` / `application`\nВыбери **Источник Loki → Namespace → Application**. Приложения выбираются из индексированной метки `application` только внутри выбранного namespace. Для другого периода используй календарь из комплекта или задай диапазон Grafana от начала A до конца B, `Длительность измерения` и `Сдвиг A`.\n\n**A** — ранний период. **B** — последние `Длительность измерения` до конца диапазона Grafana. **A** соответствует B со сдвигом назад на `Сдвиг A`. Значения в карточках — размер строк логов **до сжатия** в Loki. Пока B не наступил или ещё не завершён, его данные могут отсутствовать/быть неполными.\n"
+        "content": "### Loki · сравнение периодов по `namespace` / `job`\nВыбери **Источник Loki → Namespace → Job**. Приложения выбираются из индексированной метки `job` только внутри выбранного namespace. Для другого периода используй календарь из комплекта или задай диапазон Grafana от начала A до конца B, `Длительность измерения` и `Сдвиг A`.\n\n**A** — ранний период. **B** — последние `Длительность измерения` до конца диапазона Grafana. **A** соответствует B со сдвигом назад на `Сдвиг A`. Значения в карточках — размер строк логов **до сжатия** в Loki. Пока B не наступил или ещё не завершён, его данные могут отсутствовать/быть неполными.\n"
       },
       "fieldConfig": {
         "defaults": {
@@ -164,7 +164,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -225,7 +225,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -286,7 +286,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0)) - (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
+          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) or vector(0)) - (sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -347,7 +347,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
+          "expr": "100 * (sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) / sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -408,7 +408,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
+          "expr": "(sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -469,7 +469,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0))",
+          "expr": "(sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) or vector(0))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -530,7 +530,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
+          "expr": "100 * (sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -591,7 +591,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) or vector(0)) - (sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
+          "expr": "((sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) or vector(0)) - (sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) or vector(0)))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -652,7 +652,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -713,7 +713,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])))",
+          "expr": "(sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -774,7 +774,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * ((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}]))) / (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw}))) - 1)",
+          "expr": "100 * ((sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}]))) / (sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw}))) - 1)",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -835,7 +835,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}]))) - (sum(bytes_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",application=\"$application\"}[${window:raw}] offset ${compare_offset:raw}))))",
+          "expr": "((sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}])) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}]))) - (sum(bytes_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw})) / sum(count_over_time({namespace=\"$namespace\",job=\"$job\"}[${window:raw}] offset ${compare_offset:raw}))))",
           "queryType": "instant",
           "legendFormat": ""
         }
