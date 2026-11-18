@@ -2,3 +2,59 @@ SELECT format('ALTER TABLE dashboard.%I OWNER TO "crf-dashboard";', tablename) F
 
 
 SELECT format('ALTER TABLE public.%I OWNER TO %I;', n.tablename, o.tableowner) FROM pg_tables n JOIN pg_tables o USING (tablename) WHERE n.schemaname='public' AND o.schemaname='public_old' AND n.tableowner<>o.tableowner \gexec
+
+
+
+-- 1. СХЕМЫ
+\dn+
+ALTER SCHEMA public OWNER TO pg_database_owner;
+ALTER SCHEMA dashboard OWNER TO "crf-dashboard";
+
+-- 2. ТАБЛИЦЫ
+\dt public_old.*
+\dt dashboard_old.*
+ALTER TABLE public."ИМЯ" OWNER TO "ВЛАДЕЛЕЦ";
+ALTER TABLE dashboard."ИМЯ" OWNER TO "crf-dashboard";
+
+-- 3. ПОСЛЕДОВАТЕЛЬНОСТИ
+\ds public_old.*
+\ds dashboard_old.*
+ALTER SEQUENCE public."ИМЯ" OWNER TO "ВЛАДЕЛЕЦ";
+ALTER SEQUENCE dashboard."ИМЯ" OWNER TO "crf-dashboard";
+
+-- 4. ПРЕДСТАВЛЕНИЯ
+\dv public_old.*
+\dv dashboard_old.*
+ALTER VIEW public."ИМЯ" OWNER TO "ВЛАДЕЛЕЦ";
+ALTER VIEW dashboard."ИМЯ" OWNER TO "crf-dashboard";
+
+-- 5. МАТЕРИАЛИЗОВАННЫЕ ПРЕДСТАВЛЕНИЯ
+\dm public_old.*
+\dm dashboard_old.*
+ALTER MATERIALIZED VIEW public."ИМЯ" OWNER TO "ВЛАДЕЛЕЦ";
+ALTER MATERIALIZED VIEW dashboard."ИМЯ" OWNER TO "crf-dashboard";
+
+-- 6. ФУНКЦИИ И ПРОЦЕДУРЫ
+\df public_old.*
+\df dashboard_old.*
+\dfp public_old.*
+\dfp dashboard_old.*
+ALTER ROUTINE public."ИМЯ"(ТИПЫ) OWNER TO "ВЛАДЕЛЕЦ";
+ALTER ROUTINE dashboard."ИМЯ"(ТИПЫ) OWNER TO "crf-dashboard";
+
+-- 7. ТИПЫ И ДОМЕНЫ
+\dT public_old.*
+\dT dashboard_old.*
+\dD public_old.*
+\dD dashboard_old.*
+ALTER TYPE public."ИМЯ" OWNER TO "ВЛАДЕЛЕЦ";
+ALTER TYPE dashboard."ИМЯ" OWNER TO "crf-dashboard";
+
+-- 8. ПРАВА ДОСТУПА
+\dp public_old.*
+\dp dashboard_old.*
+\ddp
+
+SELECT format('ALTER TABLE public.%I OWNER TO "crf-manager";', tablename) FROM pg_tables WHERE schemaname='public'
+\gexec
+
