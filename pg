@@ -1,3 +1,9 @@
+BEGIN;
+DELETE FROM dashboard."user" WHERE login='u_m2jnn' RETURNING id, login;
+
+
+
+
 ALTER FUNCTION public.fn_zds_sql_table_info_esupk_upd_ts() OWNER TO "crf-manager";
 ALTER FUNCTION public.update_modified_column() OWNER TO "crf-manager";
 
