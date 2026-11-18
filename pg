@@ -1,3 +1,15 @@
+-- Новые функции
+SELECT oid::regprocedure, pg_get_userbyid(proowner)
+FROM pg_proc
+WHERE pronamespace='public'::regnamespace;
+
+-- Старые функции владельца crf-manager
+SELECT oid::regprocedure
+FROM pg_proc
+WHERE pronamespace='public_old'::regnamespace
+AND pg_get_userbyid(proowner)='crf-manager';
+
+
 SELECT format('ALTER TABLE dashboard.%I OWNER TO "crf-dashboard";', tablename) FROM pg_tables WHERE schemaname='dashboard' \gexec
 
 
