@@ -1,2 +1,4 @@
 SELECT format('ALTER TABLE dashboard.%I OWNER TO "crf-dashboard";', tablename) FROM pg_tables WHERE schemaname='dashboard' \gexec
+
+
 SELECT format('ALTER TABLE public.%I OWNER TO %I;', n.tablename, o.tableowner) FROM pg_tables n JOIN pg_tables o USING (tablename) WHERE n.schemaname='public' AND o.schemaname='public_old' AND n.tableowner<>o.tableowner \gexec
